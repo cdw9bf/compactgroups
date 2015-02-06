@@ -5,6 +5,7 @@ v1.0.0 - Trey Wenger - 20 January 2015
 v1.0.1 - Trey Wenger - 04 February 2015
          Added progress indicators
          Re-calculate separation ratio after throwing out bad groups
+Go Hoos!
 """
 vers = "v1.0.0"
 
