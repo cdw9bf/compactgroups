@@ -5,7 +5,12 @@ v1.0.0 - Trey Wenger - 20 January 2015
 v1.0.1 - Trey Wenger - 04 February 2015
          Added progress indicators
          Re-calculate separation ratio after throwing out bad groups
+<<<<<<< HEAD
+v1.0.2 - Sophia Xiao - 04 February 2015
+         Added galaxy velocity filter
+=======
 Go Hoos!
+>>>>>>> FETCH_HEAD
 """
 vers = "v1.0.0"
 
@@ -22,7 +27,7 @@ class CompactGroup:
     """
     Compact Group Object
     """
-    def __init__(self, label,members):
+    def __init__(self, label, members):
         """
         Initialize ComactGroup Object
         """
@@ -40,6 +45,16 @@ class CompactGroup:
         # get index of all galaxies dimmer than min_range of min mag
         ind = [i for (i,mag) in enumerate(self.members['mag_r'])
                if mag > min_mag + min_range]
+        # delete them
+        self.members = np.delete(self.members, ind, axis=0)
+
+    def velocityFilter(self, crit_velocity=1000.0):
+        """
+        Eliminate all passing-by galaxies moving faster than min_velocity
+        """
+        velSquared = self.members['velX']**2.+self.members['velY']**2.+self.members['velZ']**2.
+        ind = [i for (i,velsq) in enumerate(velSquared)
+               if velsq > crit_velocity**2.]
         # delete them
         self.members = np.delete(self.members, ind, axis=0)
 
@@ -89,6 +104,7 @@ def calcSepRatio(groups):
 #=====================================================================
 def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
          dwarf_range=3.0,
+         velocity_filter=1000.0,
          groupfile='groups.txt',
          memberfile='members.txt'):
     """
@@ -130,6 +146,9 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
         cg = CompactGroup(label,members)
         # eliminate dwarfs from group
         cg.eliminateDwarfs(min_range=dwarf_range)
+        # eliminate passing-by galaxies from group
+        #cg.velocityFilter(crit_velocity=velocity_filter)
+        #if len(cg.members) == 0: continue
         # calculate mediod of group
         cg.calculateMediod()
         # calculate radius of group
@@ -175,13 +194,14 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
     # save galaxy statistics
     print "Saving group members..."
     with open(memberfile,'w') as f:
-        f.write("group_id,member_id,x,y,z,mag_r\n")
+        f.write("group_id,member_id,x,y,z,velX,velY,velZ,mag_r\n")
         for cg in good_groups:
             for member in cg.members:
-                f.write("{0},{1},{2},{3},{4},{5}\n".\
+                f.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".\
                         format(cg.label,member['galaxyID'],
                                member['x'],member['y'],
-                               member['z'],member['mag_r']))
+                               member['z'],member['velX'],
+                               member['velY'],member['velZ'],member['mag_r']))
 
 #=====================================================================
 # Command Line Setup
@@ -213,6 +233,9 @@ if __name__ == "__main__":
     semi_opt.add_argument('--dwarf_range',type=float,
                           help='galaxies dimmer than dwarf_range of the brightest galaxy (mag_r) will be excluded',
                           default=3.0)
+    semi_opt.add_argument('--velocity_filter',type=float,
+                          help='galaxies moving faster than velocity_filter will be excluded',
+                          default=1000.0)
     semi_opt.add_argument('--max_sep_ratio',type=float,
                           help='maximum separation ratio to be considered a group',
                           default=1.0)
@@ -228,6 +251,7 @@ if __name__ == "__main__":
     main(args['inputfile'],bandwidth=args['bandwidth'],
          min_members=args['min_members'],
          dwarf_range=args['dwarf_range'],
+         velocity_filter=args['velocity_filter'],
          max_sep_ratio=args['max_sep_ratio'],
          groupfile=args['groupfile'],
          memberfile=args['memberfile'])
