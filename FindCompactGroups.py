@@ -167,7 +167,7 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
     print "-- separation ratio > {0}".format(max_sep_ratio)
     print "-- less than {0} members".format(min_members)
     for cg in groups:
-        if cg.sep_ratio < max_sep_ratio and len(cg.members) > min_members:
+        if cg.sep_ratio < max_sep_ratio and len(cg.members) >= min_members:
             good_groups.append(cg)
 
     print "Found {0} good groups.".format(len(good_groups))
