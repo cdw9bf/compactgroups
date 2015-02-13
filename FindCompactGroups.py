@@ -5,14 +5,10 @@ v1.0.0 - Trey Wenger - 20 January 2015
 v1.0.1 - Trey Wenger - 04 February 2015
          Added progress indicators
          Re-calculate separation ratio after throwing out bad groups
-<<<<<<< HEAD
 v1.0.2 - Sophia Xiao - 04 February 2015
          Added galaxy velocity filter
-=======
-Go Hoos!
->>>>>>> FETCH_HEAD
 """
-vers = "v1.0.0"
+vers = "v1.0.2"
 
 import sys
 import argparse
@@ -34,6 +30,8 @@ class CompactGroup:
         self.label = label
         self.members = members
         self.sep_ratio = None
+        self.vel_median = None
+        self.member_vel = None
 
     def eliminateDwarfs(self, min_range=3):
         """
@@ -45,16 +43,6 @@ class CompactGroup:
         # get index of all galaxies dimmer than min_range of min mag
         ind = [i for (i,mag) in enumerate(self.members['mag_r'])
                if mag > min_mag + min_range]
-        # delete them
-        self.members = np.delete(self.members, ind, axis=0)
-
-    def velocityFilter(self, crit_velocity=1000.0):
-        """
-        Eliminate all passing-by galaxies moving faster than min_velocity
-        """
-        velSquared = self.members['velX']**2.+self.members['velY']**2.+self.members['velZ']**2.
-        ind = [i for (i,velsq) in enumerate(velSquared)
-               if velsq > crit_velocity**2.]
         # delete them
         self.members = np.delete(self.members, ind, axis=0)
 
@@ -75,6 +63,24 @@ class CompactGroup:
                 (self.members['y']-self.mediod["y"])**2.+\
                 (self.members['z']-self.mediod["z"])**2.
         self.radius = np.sqrt(np.max(dists))
+
+    def calculateVelocity(self):
+        """
+        Calculate median galaxy velocity of the group
+        """
+        velSquared = self.members['velX']**2.+self.members['velY']**2.+self.members['velZ']**2.
+        self.member_vel = np.sqrt(velSquared)
+        self.vel_median = np.median(self.member_vel)
+
+    def velocityFilter(self, crit_vel=1000.0):
+        """
+        Eliminate galaxies moving crit_vel faster or slower than median velocity
+        """
+        ind = [i for (i,vel) in enumerate(self.member_vel)
+               if abs(vel - self.vel_median) > crit_vel]
+        # delete them
+        self.members = np.delete(self.members, ind, axis=0)
+        self.member_vel = np.delete(self.member_vel, ind, axis=0)
 
 #=====================================================================
 # Calculate Separation Ratio
@@ -146,9 +152,11 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
         cg = CompactGroup(label,members)
         # eliminate dwarfs from group
         cg.eliminateDwarfs(min_range=dwarf_range)
+        # calculate median velocity of group and velocity of galaxy
+        cg.calculateVelocity()
         # eliminate passing-by galaxies from group
-        #cg.velocityFilter(crit_velocity=velocity_filter)
-        #if len(cg.members) == 0: continue
+        cg.velocityFilter(crit_vel=velocity_filter)
+        if len(cg.members) == 0: continue
         # calculate mediod of group
         cg.calculateMediod()
         # calculate radius of group
@@ -184,24 +192,26 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
     # save group statistics
     print "Saving groups..."
     with open(groupfile,'w') as f:
-        f.write("group_id,x,y,z,radius,sep_ratio,num_members\n")
+        f.write("group_id,x,y,z,radius,vel_median,sep_ratio,num_members\n")
         for cg in good_groups:
-            f.write("{0},{1},{2},{3},{4},{5},{6}\n".\
+            f.write("{0},{1},{2},{3},{4},{5},{6},{7}\n".\
                     format(cg.label,cg.mediod["x"],cg.mediod["y"],
-                           cg.mediod["z"],cg.radius,cg.sep_ratio,
-                           len(cg.members)))
+                           cg.mediod["z"],cg.radius,cg.vel_median,
+                           cg.sep_ratio,len(cg.members)))
 
     # save galaxy statistics
     print "Saving group members..."
     with open(memberfile,'w') as f:
-        f.write("group_id,member_id,x,y,z,velX,velY,velZ,mag_r\n")
+        f.write("group_id,member_id,x,y,z,velX,velY,velZ,velTot,mag_r\n")
         for cg in good_groups:
+            vel_ind = 0
             for member in cg.members:
-                f.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".\
+                f.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".\
                         format(cg.label,member['galaxyID'],
                                member['x'],member['y'],
                                member['z'],member['velX'],
-                               member['velY'],member['velZ'],member['mag_r']))
+                               member['velY'],member['velZ'],cg.member_vel[vel_ind],member['mag_r']))
+                vel_ind += 1
 
 #=====================================================================
 # Command Line Setup
@@ -211,7 +221,7 @@ if __name__ == "__main__":
     Set up shell arguments
     """
     # set up argument parser
-    parser=argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description="Find Compact Groups in Millenium Simulation",
         prog='FindCompactGroups.py',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -223,7 +233,7 @@ if __name__ == "__main__":
     required.add_argument('inputfile',type=str,
                           help="input galaxy file")
     # add optional arguments
-    semi_opt=parser.add_argument_group('arguments set to defaults')
+    semi_opt = parser.add_argument_group('arguments set to defaults')
     semi_opt.add_argument('--bandwidth',type=float,
                           help='bandwidth of mean shift algorithm',
                           default=0.1)
