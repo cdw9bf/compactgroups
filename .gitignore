@@ -55,8 +55,3 @@ target/
 
 # emacs auto-save files
 *~
-
-# data files
-datafile_*
-members_*
-groups_*
