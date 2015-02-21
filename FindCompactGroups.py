@@ -42,11 +42,7 @@ class CompactGroup:
         min_mag = np.min(self.members['mag_r'])
         # get index of all galaxies dimmer than min_range of min mag
         ind = [i for (i,mag) in enumerate(self.members['mag_r'])
-<<<<<<< HEAD
-               if (mag > min_mag + min_range) or mag == 99]
-=======
                if mag > min_mag + min_range]
->>>>>>> FETCH_HEAD
         # delete them
         self.members = np.delete(self.members, ind, axis=0)
 
@@ -156,10 +152,6 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
         cg = CompactGroup(label,members)
         # eliminate dwarfs from group
         cg.eliminateDwarfs(min_range=dwarf_range)
-<<<<<<< HEAD
-        if len(cg.members) == 0: continue
-=======
->>>>>>> FETCH_HEAD
         # calculate median velocity of group and velocity of galaxy
         cg.calculateVelocity()
         # eliminate passing-by galaxies from group
