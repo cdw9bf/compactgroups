@@ -153,11 +153,18 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
         cg = CompactGroup(label,members)
         # eliminate dwarfs from group
         cg.eliminateDwarfs(min_range=dwarf_range)
+<<<<<<< HEAD
         if len(cg.members) == 0: continue
         # calculate median velocity of group and velocity of galaxy
         cg.calculateVelocity()
         # eliminate passing-by galaxies from group
         if not no_vel_filter: cg.velocityFilter(crit_vel=velocity_filter)
+=======
+        # calculate median velocity of group and velocity of galaxy
+        cg.calculateVelocity()
+        # eliminate passing-by galaxies from group
+        cg.velocityFilter(crit_vel=velocity_filter)
+>>>>>>> origin/master
         if len(cg.members) == 0: continue
         # calculate mediod of group
         cg.calculateMediod()
