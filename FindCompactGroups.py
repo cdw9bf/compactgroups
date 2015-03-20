@@ -36,13 +36,13 @@ class CompactGroup:
     def eliminateDwarfs(self, min_range=3):
         """
         Eliminate all galaxies dimmer than min_range magnitudes in r
-        of the brightest galaxy.
+        of the brightest galaxy
         """
         # get minimum magnitude
         min_mag = np.min(self.members['mag_r'])
         # get index of all galaxies dimmer than min_range of min mag
         ind = [i for (i,mag) in enumerate(self.members['mag_r'])
-               if mag > min_mag + min_range]
+               if mag > min_mag + min_range or mag == 99]     # mag=99 indicates galaxies without stars
         # delete them
         self.members = np.delete(self.members, ind, axis=0)
 
@@ -112,7 +112,8 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
          dwarf_range=3.0,
          velocity_filter=1000.0,
          groupfile='groups.txt',
-         memberfile='members.txt'):
+         memberfile='members.txt',
+         no_vel_filter=False):
     """
     Search filename for compact groups
     """
@@ -152,10 +153,11 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
         cg = CompactGroup(label,members)
         # eliminate dwarfs from group
         cg.eliminateDwarfs(min_range=dwarf_range)
+        if len(cg.members) == 0: continue
         # calculate median velocity of group and velocity of galaxy
         cg.calculateVelocity()
         # eliminate passing-by galaxies from group
-        cg.velocityFilter(crit_vel=velocity_filter)
+        if not no_vel_filter: cg.velocityFilter(crit_vel=velocity_filter)
         if len(cg.members) == 0: continue
         # calculate mediod of group
         cg.calculateMediod()
@@ -255,6 +257,10 @@ if __name__ == "__main__":
     semi_opt.add_argument('--memberfile',type=str,
                           help='output file with group member statistics',
                           default='members.txt')
+    semi_opt.add_argument('--no_vel_filter',action='store_true',
+                          help='suppress velocity filter',
+                          default=False)
+
     # get command line arguments
     args = vars(parser.parse_args())
     # run with arguments
@@ -264,4 +270,5 @@ if __name__ == "__main__":
          velocity_filter=args['velocity_filter'],
          max_sep_ratio=args['max_sep_ratio'],
          groupfile=args['groupfile'],
-         memberfile=args['memberfile'])
+         memberfile=args['memberfile'],
+         no_vel_filter=args['no_vel_filter'])
