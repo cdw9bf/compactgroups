@@ -7,14 +7,18 @@ v1.0.1 - Trey Wenger - 04 February 2015
          Re-calculate separation ratio after throwing out bad groups
 v1.0.2 - Sophia Xiao - 04 February 2015
          Added galaxy velocity filter
+v1.0.3 - TVW 20 March 2015
+         added DBSCAN clustering algorithm, nearest neighbors,
+         log_file
 """
-vers = "v1.0.2"
+vers = "v1.0.3"
 
 import sys
 import argparse
 import numpy as np
-from sklearn.cluster import MeanShift
+from sklearn.cluster import MeanShift,DBSCAN
 from sklearn.neighbors import NearestNeighbors
+import time
 
 #=====================================================================
 # Compact Group Object
@@ -85,7 +89,7 @@ class CompactGroup:
 #=====================================================================
 # Calculate Separation Ratio
 #=====================================================================
-def calcSepRatio(groups):
+def calcSepRatio(groups,verbose):
     """
     Calculate separation ratio for each group
     """
@@ -95,9 +99,10 @@ def calcSepRatio(groups):
     neighbors = NearestNeighbors(n_neighbors=2,algorithm='ball_tree')
     neighbors.fit(locs)
     for c_ind,cg in enumerate(groups):
-        sys.stdout.write("\r[{0:10s}] {1}%".\
-                         format('#'*(10*(1+c_ind)/len(groups)),
-                                100*(1+c_ind)/len(groups)))
+        if verbose:
+            sys.stdout.write("\r[{0:10s}] {1}%".\
+                             format('#'*(10*(1+c_ind)/len(groups)),
+                                    100*(1+c_ind)/len(groups)))
         closest = neighbors.kneighbors([cg.mediod["x"],
                                         cg.mediod["y"],
                                         cg.mediod["z"]])
@@ -106,45 +111,91 @@ def calcSepRatio(groups):
         cg.sep_ratio = cg.radius/dist
 
 #=====================================================================
+# Handle information
+#=====================================================================
+def logit(message, verbose, log_file):
+    if verbose:
+        print message
+    if log_file is not None:
+        with open(log_file,'a') as f:
+            f.write(message+'\n')
+
+#=====================================================================
 # Find Groups Algorithm
 #=====================================================================
-def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
+def main(filename,bandwidth=0.1,neighborhood=0.5,
+         min_members=3,max_sep_ratio=1.0,
          dwarf_range=3.0,
          velocity_filter=1000.0,
          groupfile='groups.txt',
          memberfile='members.txt',
-         no_vel_filter=False):
+         no_vel_filter=False,use_dbscan = False, verbose=True,
+         log_file=None):
     """
     Search filename for compact groups
     """
-    print "Reading in data file..."
+    # erase log file
+    if log_file is not None:
+        with open(log_file,'w') as f:
+            f.write('FindCompactGroups {0}\n'.format(vers))
+    logit('Process started {0}'.format(time.ctime()),False,log_file)
+    logit('Using data file {0}'.format(filename),False,log_file)
+    logit('Using bandwidth {0}'.format(bandwidth),False,log_file)
+    logit('Using neighborhood {0}'.format(neighborhood),False,log_file)
+    logit('Using min_members {0}'.format(min_members),False,log_file)
+    logit('Using max_sep_ratio {0}'.format(max_sep_ratio),False,log_file)
+    logit('Using dwarf_range {0}'.format(dwarf_range),False,log_file)
+    logit('Using velocity filter {0}'.format(velocity_filter),False,log_file)
+    logit('Using groupfile {0}'.format(groupfile),False,log_file)
+    logit('Using memberfile {0}'.format(memberfile),False,log_file)
+    logit('no_vel_filter? {0}'.format(no_vel_filter),False,log_file)
+    logit('use_dbscan? {0}'.format(use_dbscan),False,log_file)
+    logit("Reading in data file...",verbose,log_file)
     # read in data file
     data = np.genfromtxt(filename,dtype=None,delimiter=',',
                          names=True,comments="#")
-    print "Found {0} galaxies in data file...".format(len(data))
-    # set up mean-shift algorithm
-    ms = MeanShift(bandwidth=bandwidth,min_bin_freq=min_members,
-                   cluster_all=False)
-    # perform the fit
+    logit("Found {0} galaxies in data file...".format(len(data)),
+          verbose,log_file)
+    # set up for clustering
     X = np.array(zip(data['x'],data['y'],data['z']))
-    print "Locating galaxy groups..."
-    ms.fit(X)
-    labels = ms.labels_
+    logit("Locating galaxy groups...",verbose,log_file)
+    if not use_dbscan:
+        logit("Using Mean-shift algorithm",verbose,log_file)
+        # set up mean-shift algorithm
+        ms = MeanShift(bandwidth=bandwidth,min_bin_freq=min_members,
+                       cluster_all=False)
+        # perform the fit
+        ms.fit(X)
+        labels = ms.labels_
+    else:
+        logit("Using DBSCAN algorithm",verbose,log_file)
+        # set up DBSCAN
+        db = DBSCAN(eps=neighborhood,min_samples=min_members)
+        # perform the fit
+        db.fit(X)
+        labels = db.labels_
     # get unique labels
     labels_unique = np.unique(labels)
     n_clusters = len(labels_unique)
 
     # create cluster object for each cluster
-    print "Found {0} potential groups...".format(n_clusters)
-    print "Measuring group properties..."
+    logit("Found {0} potential groups...".format(n_clusters),verbose,
+          log_file)
+    if n_clusters == 0:
+        logit("No good groups!",verbose,log_file)
+        logit("Done!",verbose,log_file)
+        logit("Process completed {0}".format(time.ctime()),False,log_file)
+        return
+    logit("Measuring group properties...",verbose,log_file)
     groups = []
     for l_ind,label in enumerate(labels_unique):
         # skip label -1 (ungrouped)
         if label == -1:
             continue
-        sys.stdout.write("\r[{0:10s}] {1}%".\
-                         format('#'*(10*(1+l_ind)/n_clusters),
-                                100*(1+l_ind)/n_clusters))
+        if verbose:
+            sys.stdout.write("\r[{0:10s}] {1}%".\
+                             format('#'*(10*(1+l_ind)/n_clusters),
+                                    100*(1+l_ind)/n_clusters))
         # get all members of this group
         members_ind = [ind for (ind,this_label) in enumerate(labels)
                        if this_label == label]
@@ -157,7 +208,8 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
         # calculate median velocity of group and velocity of galaxy
         cg.calculateVelocity()
         # eliminate passing-by galaxies from group
-        if not no_vel_filter: cg.velocityFilter(crit_vel=velocity_filter)
+        if not no_vel_filter:
+            cg.velocityFilter(crit_vel=velocity_filter)
         if len(cg.members) == 0: continue
         # calculate mediod of group
         cg.calculateMediod()
@@ -165,34 +217,58 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
         cg.calculateRadius()
         # add it to the list
         groups.append(cg)
-    print
+    if verbose:
+        print
+
+    if len(groups) == 0:
+        logit("No good groups!",verbose,log_file)
+        logit("Done!",verbose,log_file)
+        logit("Process completed {0}".format(time.ctime()),False,log_file)
+        return
 
     # calculate separation ratio for each group, and pull out
     # good groups
-    print "Calculating separation ratio of groups..."
-    good_groups = []
-    calcSepRatio(groups)
-    print
-    print "Eliminating groups with"
-    print "-- separation ratio > {0}".format(max_sep_ratio)
-    print "-- less than {0} members".format(min_members)
-    for cg in groups:
-        if cg.sep_ratio < max_sep_ratio and len(cg.members) >= min_members:
-            good_groups.append(cg)
-
-    print "Found {0} good groups.".format(len(good_groups))
+    if len(groups) == 1:
+        logit("Only one group. Assigning separation ratio of nan",
+              verbose,log_file)
+        groups[0].sep_ratio = np.nan
+        good_groups = groups
+    else:
+        logit("Calculating separation ratio of groups...",verbose,log_file)
+        good_groups = []
+        calcSepRatio(groups,verbose)
+        if verbose:
+            print
+        logit("Eliminating groups with",verbose,log_file)
+        logit("-- separation ratio > {0}".format(max_sep_ratio),verbose,
+              log_file)
+        logit("-- less than {0} members".format(min_members),verbose,
+              log_file)
+        for cg in groups:
+            if cg.sep_ratio < max_sep_ratio and len(cg.members) >= min_members:
+                good_groups.append(cg)
+        logit("Found {0} good groups.".format(len(good_groups)),verbose,
+              log_file)
 
     # re-calculate separation ratio for each group
-    if len(good_groups) > 0:
-        print "Re-calculating separation ratio of good groups..."
-        calcSepRatio(good_groups)
-        print
-    else:
-        print "No good groups!"
+    if len(good_groups) > 1:
+        logit("Re-calculating separation ratio of good groups...",
+              verbose,log_file)  
+        calcSepRatio(good_groups,verbose)
+        if verbose:
+            print
+    elif len(good_groups) == 0:
+        logit("No good groups!",verbose,log_file)
+        logit("Done!",verbose,log_file)
+        logit("Process completed {0}".format(time.ctime()),False,log_file)
         return
+    else:
+        logit("Only one good group. Assigning separation ratio of nan",
+              verbose,log_file)
+        good_groups[0].sep_ratio = np.nan
 
     # save group statistics
-    print "Saving groups..."
+    logit("Saving groups...",verbose,log_file)
     with open(groupfile,'w') as f:
         f.write("group_id,x,y,z,radius,vel_median,sep_ratio,num_members\n")
         for cg in good_groups:
@@ -202,7 +278,7 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
                            cg.sep_ratio,len(cg.members)))
 
     # save galaxy statistics
-    print "Saving group members..."
+    logit("Saving group members...",verbose,log_file)
     with open(memberfile,'w') as f:
         f.write("group_id,member_id,x,y,z,velX,velY,velZ,velTot,mag_r\n")
         for cg in good_groups:
@@ -214,6 +290,8 @@ def main(filename,bandwidth=0.1,min_members=3,max_sep_ratio=1.0,
                                member['z'],member['velX'],
                                member['velY'],member['velZ'],cg.member_vel[vel_ind],member['mag_r']))
                 vel_ind += 1
+    logit("Done!",verbose,log_file)
+    logit("Process completed {0}".format(time.ctime()),False,log_file)
 
 #=====================================================================
 # Command Line Setup
@@ -239,6 +317,9 @@ if __name__ == "__main__":
     semi_opt.add_argument('--bandwidth',type=float,
                           help='bandwidth of mean shift algorithm',
                           default=0.1)
+    semi_opt.add_argument('--neighborhood',type=float,
+                          help='neighborhood of DBSCAN algorithm (max distance between two galaxies to be considered part of same group)',
+                          default=0.5)
     semi_opt.add_argument('--min_members',type=int,
                           help='minimum number of members in group',
                           default=3)
@@ -260,15 +341,28 @@ if __name__ == "__main__":
     semi_opt.add_argument('--no_vel_filter',action='store_true',
                           help='suppress velocity filter',
                           default=False)
+    semi_opt.add_argument('--use_dbscan',action='store_true',
+                          help='Use DBSCAN clustering algorithm (default is mean shift)',
+                          default=False)
+    semi_opt.add_argument('--verbose',action='store_true',
+                          help='Print out status along the way',
+                          default=False)
+    semi_opt.add_argument('--log_file',type=str,
+                          help='Print out status to log file of this name',
+                          default=None)
 
     # get command line arguments
     args = vars(parser.parse_args())
     # run with arguments
     main(args['inputfile'],bandwidth=args['bandwidth'],
+         neighborhood=args['neighborhood'],
          min_members=args['min_members'],
          dwarf_range=args['dwarf_range'],
          velocity_filter=args['velocity_filter'],
          max_sep_ratio=args['max_sep_ratio'],
          groupfile=args['groupfile'],
          memberfile=args['memberfile'],
-         no_vel_filter=args['no_vel_filter'])
+         no_vel_filter=args['no_vel_filter'],
+         use_dbscan=args['use_dbscan'],
+         verbose=args['verbose'],
+         log_file=args['log_file'])
