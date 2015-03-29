@@ -10,6 +10,8 @@ v1.0.2 - Sophia Xiao - 04 February 2015
 v1.0.3 - TVW 20 March 2015
          added DBSCAN clustering algorithm, nearest neighbors,
          log_file
+v1.0.4 - TVW 29 March 2015
+         use pandas
 """
 vers = "v1.0.3"
 
@@ -19,6 +21,7 @@ import numpy as np
 from sklearn.cluster import MeanShift,DBSCAN
 from sklearn.neighbors import NearestNeighbors
 import time
+import pandas
 
 #=====================================================================
 # Compact Group Object
@@ -152,8 +155,7 @@ def main(filename,bandwidth=0.1,neighborhood=0.5,
     logit('use_dbscan? {0}'.format(use_dbscan),False,log_file)
     logit("Reading in data file...",verbose,log_file)
     # read in data file
-    data = np.genfromtxt(filename,dtype=None,delimiter=',',
-                         names=True,comments="#")
+    data = pandas.read_csv(filename,header=0,comment='#')
     logit("Found {0} galaxies in data file...".format(len(data)),
           verbose,log_file)
     # set up for clustering
